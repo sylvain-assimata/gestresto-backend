@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Un "Restaurant" correspond à un maquis/restaurant client de GestResto.
+// Pour l'instant l'app gère un seul restaurant par déploiement (MVP mono-tenant),
+// mais la structure permet d'en ajouter plusieurs plus tard.
+model Restaurant {
+  id        Int      @id @default(autoincrement())
+  nom       String
+  contact   String
+  plan      String   @default("gratuit") // gratuit | essentiel | pro
+  createdAt DateTime @default(now())
+
+  utilisateurs  Utilisateur[]
+  plats         Plat[]
+  stock         IngredientStock[]
+  fournisseurs  Fournisseur[]
+  employes      Employe[]
+  ventes        Vente[]
+  depenses      Depense[]
+}
+
+model Utilisateur {
+  id             Int      @id @default(autoincrement())
+  restaurantId   Int
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id])
+  nom            String
+  email          String   @unique
+  motDePasseHash String
+  role           String   @default("proprietaire") // proprietaire | caissier
+  createdAt      DateTime @default(now())
+}
+
+model Plat {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  nom          String
+  prix         Int
+  emoji        String   @default("🍽️")
+
+  recette      RecetteIngredient[]
+  lignesVente  LigneVente[]
+}
+
+model IngredientStock {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  nom          String
+  quantite     Float
+  unite        String
+  seuil        Float
+  prixUnitaire Int      @default(0)
+
+  utiliseDans  RecetteIngredient[]
+}
+
+// Table de liaison : combien d'un ingrédient est consommé par un plat vendu
+model RecetteIngredient {
+  id       Int             @id @default(autoincrement())
+  platId   Int
+  plat     Plat            @relation(fields: [platId], references: [id])
+  stockId  Int
+  stock    IngredientStock @relation(fields: [stockId], references: [id])
+  quantite Float
+}
+
+model Vente {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  montant      Int
+  methode      String   // Espèces | Mobile Money | Crédit client
+  createdAt    DateTime @default(now())
+
+  lignes       LigneVente[]
+}
+
+model LigneVente {
+  id       Int   @id @default(autoincrement())
+  venteId  Int
+  vente    Vente @relation(fields: [venteId], references: [id])
+  platId   Int
+  plat     Plat  @relation(fields: [platId], references: [id])
+  nom      String
+  prix     Int
+  quantite Int
+}
+
+model Fournisseur {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  nom          String
+  contact      String
+  produits     String
+  solde        Int      @default(0)
+
+  achats       AchatFournisseur[]
+}
+
+model AchatFournisseur {
+  id            Int         @id @default(autoincrement())
+  fournisseurId Int
+  fournisseur   Fournisseur @relation(fields: [fournisseurId], references: [id])
+  montant       Int
+  description   String
+  createdAt     DateTime    @default(now())
+}
+
+model Employe {
+  id             Int      @id @default(autoincrement())
+  restaurantId   Int
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id])
+  nom            String
+  poste          String
+  salaireMensuel Int
+  avances        Int      @default(0)
+  present        Boolean  @default(true)
+
+  historiqueAvances Avance[]
+}
+
+model Avance {
+  id        Int      @id @default(autoincrement())
+  employeId Int
+  employe   Employe  @relation(fields: [employeId], references: [id])
+  montant   Int
+  createdAt DateTime @default(now())
+}
+
+// Dépenses générales : paiements fournisseurs, avances, etc.
+model Depense {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  montant      Int
+  description  String
+  createdAt    DateTime @default(now())
+}
