@@ -12,22 +12,42 @@ router.get("/", async (req, res) => {
   res.json(stock);
 });
 
-// POST /api/stock  { nom, quantite, unite, seuil, prixUnitaire }
+// POST /api/stock  { nom, quantite, unite, seuil, prixUnitaire, prixVente? }
+// Si "prixVente" est fourni, le produit devient aussi immédiatement vendable
+// en Caisse : un plat est créé, lié à ce stock (1 unité déduite par vente).
 router.post("/", async (req, res) => {
-  const { nom, quantite, unite, seuil, prixUnitaire } = req.body;
+  const { nom, quantite, unite, seuil, prixUnitaire, prixVente } = req.body;
   if (!nom || quantite === undefined) {
     return res.status(400).json({ erreur: "Nom et quantité requis." });
   }
-  const produit = await prisma.ingredientStock.create({
-    data: {
-      restaurantId: req.restaurantId,
-      nom,
-      quantite: parseFloat(quantite) || 0,
-      unite: unite || "unité",
-      seuil: parseFloat(seuil) || 0,
-      prixUnitaire: parseInt(prixUnitaire) || 0,
-    },
+
+  const produit = await prisma.$transaction(async (tx) => {
+    const produitCree = await tx.ingredientStock.create({
+      data: {
+        restaurantId: req.restaurantId,
+        nom,
+        quantite: parseFloat(quantite) || 0,
+        unite: unite || "unité",
+        seuil: parseFloat(seuil) || 0,
+        prixUnitaire: parseInt(prixUnitaire) || 0,
+      },
+    });
+
+    if (prixVente && parseInt(prixVente) > 0) {
+      await tx.plat.create({
+        data: {
+          restaurantId: req.restaurantId,
+          nom,
+          prix: parseInt(prixVente),
+          emoji: "🍽️",
+          recette: { create: [{ quantite: 1, stock: { connect: { id: produitCree.id } } }] },
+        },
+      });
+    }
+
+    return produitCree;
   });
+
   res.status(201).json(produit);
 });
 
